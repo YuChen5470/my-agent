@@ -1,0 +1,14 @@
+# Vercel builds from source, so none of this needs uploading. Without this
+# file the CLI tried to send the 828MB local .next directory and the upload
+# aborted repeatedly.
+.next
+.eve
+node_modules
+.vercel
+.git
+
+# Local-only tooling and notes, not part of the build.
+.claude
+.scratch
+docs
+README.md

@@ -19,13 +19,7 @@ import {
   PromptInputSubmit,
   PromptInputTextarea,
 } from "@/components/ai-elements/prompt-input";
-import {
-  Tool,
-  ToolContent,
-  ToolHeader,
-  ToolInput,
-  ToolOutput,
-} from "@/components/ai-elements/tool";
+import { ToolActivity, ToolReceipt } from "@/components/tool-activity";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -119,27 +113,31 @@ export default function Page() {
                     );
                   }
 
-                  // Show the agent's working. The tool call is the receipt for
-                  // every number in the prose around it.
                   if (part.type === "dynamic-tool") {
+                    // ask_question is rendered as its own confirmation prompt
+                    // below, so it should not also appear as machinery here.
+                    if (part.toolName === "ask_question") return null;
+
                     const plot = asPlot(part);
+                    const running =
+                      part.state === "input-streaming" ||
+                      part.state === "input-available";
 
                     return (
                       <div key={index}>
-                        <Tool>
-                          <ToolHeader
-                            state={part.state}
+                        {running ? (
+                          <ToolActivity
+                            input={part.input}
                             toolName={part.toolName}
-                            type="dynamic-tool"
                           />
-                          <ToolContent>
-                            <ToolInput input={part.input} />
-                            <ToolOutput
-                              errorText={part.errorText}
-                              output={part.output}
-                            />
-                          </ToolContent>
-                        </Tool>
+                        ) : (
+                          <ToolReceipt
+                            errorText={part.errorText}
+                            input={part.input}
+                            output={part.output}
+                            toolName={part.toolName}
+                          />
+                        )}
                         {plot ? <FunctionPlot {...plot} /> : null}
                       </div>
                     );

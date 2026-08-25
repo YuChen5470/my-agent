@@ -48,6 +48,7 @@
     "eslint-config-next": "16.3.2",
     "just-bash": "^3.4.2",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vercel": "^59.5.0"
   }
 }

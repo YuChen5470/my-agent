@@ -19,7 +19,11 @@ import {
   PromptInputSubmit,
   PromptInputTextarea,
 } from "@/components/ai-elements/prompt-input";
-import { ToolActivity, ToolReceipt } from "@/components/tool-activity";
+import {
+  ThinkingIndicator,
+  ToolActivity,
+  ToolReceipt,
+} from "@/components/tool-activity";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -148,6 +152,11 @@ export default function Page() {
               </MessageContent>
             </Message>
           ))}
+
+          {/* The wait a student actually notices is the model thinking, not the
+              tools — mathjs returns in milliseconds, so a per-tool spinner
+              flashes past unseen. This covers the real latency. */}
+          {isBusy ? <ThinkingIndicator /> : null}
 
           {/* AI Elements' <Confirmation> is coupled to the AI SDK tool-approval
               shape (it requires an `approval` object and renders null without

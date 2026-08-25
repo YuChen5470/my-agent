@@ -34,7 +34,6 @@ export function FunctionPlot({
   from,
   to,
   segments,
-  yWindow,
 }: FunctionPlotProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [hovered, setHovered] = useState<PlotPoint | null>(null);
@@ -42,16 +41,26 @@ export function FunctionPlot({
   const allPoints = useMemo(() => segments.flat(), [segments]);
 
   const [yMin, yMax] = useMemo<[number, number]>(() => {
-    if (yWindow && yWindow.min < yWindow.max) {
-      return [yWindow.min, yWindow.max];
-    }
+    // Derived from the points actually being drawn, NOT from `yWindow`.
+    //
+    // yWindow is the tool's *clip* bound — deliberately generous (12x the
+    // interquartile range) so it cuts poles without truncating legitimate
+    // curves. Using it as the viewport made sin(x) render on a -17..17 axis,
+    // squashing a wave that only spans -1..1 into a flat line. Clipping and
+    // framing are different jobs.
     if (allPoints.length === 0) return [-10, 10];
+
     const ys = allPoints.map((p) => p.y);
     const min = Math.min(...ys);
     const max = Math.max(...ys);
-    // A constant function would otherwise give a zero-height window.
-    return min === max ? [min - 1, max + 1] : [min, max];
-  }, [allPoints, yWindow]);
+
+    // A constant function would otherwise give a zero-height viewport.
+    if (min === max) return [min - 1, max + 1];
+
+    // A little headroom so the curve does not touch the frame.
+    const padding = (max - min) * 0.08;
+    return [min - padding, max + padding];
+  }, [allPoints]);
 
   const toSvgX = useCallback(
     (x: number) =>

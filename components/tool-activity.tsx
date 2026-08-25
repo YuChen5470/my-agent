@@ -1,7 +1,7 @@
 "use client";
 
 import { Spinner } from "@/components/ui/spinner";
-import { CheckIcon, ChevronRightIcon } from "lucide-react";
+import { CheckIcon, XIcon } from "lucide-react";
 
 /**
  * Human-readable present-tense labels, so a student sees "Differentiating"
@@ -37,6 +37,20 @@ function describeWork(toolName: string, input: unknown): string {
   return "Working";
 }
 
+/**
+ * Shown for the whole time the agent is working, which is where the real wait
+ * is. The per-tool spinner below almost never appears: mathjs answers in
+ * milliseconds, so a tool's running state is over before it can be painted.
+ */
+export function ThinkingIndicator() {
+  return (
+    <div className="flex items-center gap-2 text-muted-foreground text-sm">
+      <Spinner className="size-3.5" />
+      <span>Thinking…</span>
+    </div>
+  );
+}
+
 export function ToolActivity({
   toolName,
   input,
@@ -53,44 +67,44 @@ export function ToolActivity({
 }
 
 /**
- * Reduce a tool result to a few readable lines.
+ * The single most useful fact about a finished tool call, as one short line.
  *
- * Never dump the raw payload. `plot_function` returns 400 coordinate pairs,
- * and printing them buries the one thing a student wants to check — the
- * answer — under several screens of JSON.
+ * Nothing is expandable and no raw payload is ever rendered: `plot_function`
+ * returns 400 coordinate pairs, and even a tidied list of them cluttered the
+ * transcript. What matters to a student is that a tool ran and what it
+ * returned, which fits on one line.
  */
-function summarise(output: unknown): [string, string][] {
+function summariseOneLine(
+  toolName: string,
+  input: unknown,
+  output: unknown
+): string {
+  const verb = describeWork(toolName, input).toLowerCase();
+
   if (!output || typeof output !== "object") {
-    return [["result", String(output)]];
+    return verb;
   }
 
-  const rows: [string, string][] = [];
+  const record = output as Record<string, unknown>;
 
-  for (const [key, value] of Object.entries(output)) {
-    // Bookkeeping the student did not ask about.
-    if (key === "ok" || key === "unsupported") continue;
-
-    if (Array.isArray(value)) {
-      // Segments and factor lists: describe the shape, don't print it.
-      const points = value.flat().length;
-      rows.push([
-        key,
-        `${value.length} ${value.length === 1 ? "branch" : "branches"}, ${points} points`,
-      ]);
-      continue;
-    }
-
-    if (value && typeof value === "object") {
-      rows.push([key, JSON.stringify(value)]);
-      continue;
-    }
-
-    if (value !== undefined) {
-      rows.push([key, String(value)]);
-    }
+  // plot_function: the branch count is the interesting part — it is what tells
+  // the student the curve was broken at an asymptote rather than drawn through.
+  if (Array.isArray(record.segments)) {
+    const count = record.segments.length;
+    return `${verb} — ${count} ${count === 1 ? "branch" : "branches"}`;
   }
 
-  return rows;
+  // number_theory factorisation ships a pre-rendered form so the model never
+  // has to reassemble it; prefer that over the raw array.
+  if (typeof record.display === "string") {
+    return `${verb} — ${record.display}`;
+  }
+
+  if (record.result !== undefined && typeof record.result !== "object") {
+    return `${verb} — ${String(record.result)}`;
+  }
+
+  return verb;
 }
 
 /**
@@ -112,38 +126,19 @@ export function ToolReceipt({
   output: unknown;
   errorText?: string;
 }) {
-  const failed = Boolean(errorText);
+  if (errorText) {
+    return (
+      <p className="mb-3 flex items-center gap-1.5 text-destructive text-xs">
+        <XIcon className="size-3 shrink-0" />
+        <span>{errorText}</span>
+      </p>
+    );
+  }
 
   return (
-    <details className="group mb-3">
-      <summary className="flex cursor-pointer list-none items-center gap-1.5 text-muted-foreground text-xs hover:text-foreground">
-        <ChevronRightIcon className="size-3 transition-transform group-open:rotate-90" />
-        {failed ? (
-          <span className="text-destructive">
-            {toolName} failed
-          </span>
-        ) : (
-          <>
-            <CheckIcon className="size-3" />
-            <span>
-              {describeWork(toolName, input).toLowerCase()} — show working
-            </span>
-          </>
-        )}
-      </summary>
-
-      <div className="mt-2 space-y-1 border-muted border-l-2 pl-3 font-mono text-[11px]">
-        {failed ? (
-          <p className="text-destructive">{errorText}</p>
-        ) : (
-          summarise(output).map(([label, value]) => (
-            <p key={label}>
-              <span className="text-muted-foreground">{label}: </span>
-              <span>{value}</span>
-            </p>
-          ))
-        )}
-      </div>
-    </details>
+    <p className="mb-3 flex items-center gap-1.5 text-muted-foreground text-xs">
+      <CheckIcon className="size-3 shrink-0" />
+      <span>{summariseOneLine(toolName, input, output)}</span>
+    </p>
   );
 }

@@ -53,6 +53,47 @@ export function ToolActivity({
 }
 
 /**
+ * Reduce a tool result to a few readable lines.
+ *
+ * Never dump the raw payload. `plot_function` returns 400 coordinate pairs,
+ * and printing them buries the one thing a student wants to check — the
+ * answer — under several screens of JSON.
+ */
+function summarise(output: unknown): [string, string][] {
+  if (!output || typeof output !== "object") {
+    return [["result", String(output)]];
+  }
+
+  const rows: [string, string][] = [];
+
+  for (const [key, value] of Object.entries(output)) {
+    // Bookkeeping the student did not ask about.
+    if (key === "ok" || key === "unsupported") continue;
+
+    if (Array.isArray(value)) {
+      // Segments and factor lists: describe the shape, don't print it.
+      const points = value.flat().length;
+      rows.push([
+        key,
+        `${value.length} ${value.length === 1 ? "branch" : "branches"}, ${points} points`,
+      ]);
+      continue;
+    }
+
+    if (value && typeof value === "object") {
+      rows.push([key, JSON.stringify(value)]);
+      continue;
+    }
+
+    if (value !== undefined) {
+      rows.push([key, String(value)]);
+    }
+  }
+
+  return rows;
+}
+
+/**
  * The quiet, collapsed record of a finished tool call.
  *
  * This deliberately stays in the transcript rather than disappearing. The
@@ -91,17 +132,17 @@ export function ToolReceipt({
         )}
       </summary>
 
-      <div className="mt-2 space-y-2 border-muted border-l-2 pl-3">
-        <pre className="overflow-x-auto whitespace-pre-wrap break-words font-mono text-[11px] text-muted-foreground">
-          {JSON.stringify(input, null, 2)}
-        </pre>
-        <pre
-          className={`overflow-x-auto whitespace-pre-wrap break-words font-mono text-[11px] ${
-            failed ? "text-destructive" : "text-foreground"
-          }`}
-        >
-          {errorText ?? JSON.stringify(output, null, 2)}
-        </pre>
+      <div className="mt-2 space-y-1 border-muted border-l-2 pl-3 font-mono text-[11px]">
+        {failed ? (
+          <p className="text-destructive">{errorText}</p>
+        ) : (
+          summarise(output).map(([label, value]) => (
+            <p key={label}>
+              <span className="text-muted-foreground">{label}: </span>
+              <span>{value}</span>
+            </p>
+          ))
+        )}
       </div>
     </details>
   );

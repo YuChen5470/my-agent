@@ -44,11 +44,15 @@ import {
 } from "@/components/function-plot";
 import { describeAgentError } from "@/lib/agent-error";
 import { prepareImage } from "@/lib/prepare-image";
+import { readStoredSession, writeStoredSession } from "@/lib/stored-session";
 import {
-  clearStoredSession,
-  readStoredSession,
-  writeStoredSession,
-} from "@/lib/stored-session";
+  type ArchivedChat,
+  archiveChat,
+  clearHistory,
+  readHistory,
+  titleFrom,
+} from "@/lib/chat-history";
+import { ChatHistoryMenu } from "@/components/chat-history-menu";
 import { SigmaIcon } from "lucide-react";
 import { useState, useSyncExternalStore } from "react";
 import type { UserContent } from "ai";
@@ -135,22 +139,63 @@ function useIsHydrated(): boolean {
  */
 export default function Page() {
   const hydrated = useIsHydrated();
-  const [storedSession] = useState<ClientSessionState | undefined>(() =>
+  const [active, setActive] = useState<ClientSessionState | undefined>(() =>
     typeof window === "undefined" ? undefined : readStoredSession()
   );
+  const [history, setHistory] = useState<ArchivedChat[]>(() =>
+    typeof window === "undefined" ? [] : readHistory()
+  );
+
+  /**
+   * Files the conversation being left behind, then points at another.
+   *
+   * `next` is `undefined` for a brand new chat. The remount that actually
+   * switches conversations comes from the `key` below, which is why this only
+   * has to move the pointer.
+   */
+  const switchTo = (
+    next: ClientSessionState | undefined,
+    leaving: ArchivedChat | null
+  ) => {
+    if (leaving !== null) {
+      setHistory(archiveChat(leaving));
+    }
+    writeStoredSession(next);
+    setActive(next);
+  };
 
   return (
     <MathsEngine
-      initialSession={hydrated ? storedSession : undefined}
-      key={hydrated ? "restored" : "initial"}
+      history={history}
+      initialSession={hydrated ? active : undefined}
+      /**
+       * Keyed by the conversation, so choosing a different one rebuilds the
+       * agent around it — `useEveAgent` reads its session once, at store
+       * construction, so a remount is the documented way to move.
+       */
+      key={hydrated ? (active?.sessionId ?? "new") : "initial"}
+      onClearHistory={() => {
+        clearHistory();
+        setHistory([]);
+      }}
+      onSwitch={switchTo}
     />
   );
 }
 
 function MathsEngine({
+  history,
   initialSession,
+  onClearHistory,
+  onSwitch,
 }: {
+  history: ArchivedChat[];
   initialSession: ClientSessionState | undefined;
+  onClearHistory: () => void;
+  onSwitch: (
+    next: ClientSessionState | undefined,
+    leaving: ArchivedChat | null
+  ) => void;
 }) {
   const agent = useEveAgent({
     initialSession,
@@ -162,10 +207,45 @@ function MathsEngine({
   const isBusy = agent.status === "submitted" || agent.status === "streaming";
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
 
+  /**
+   * The conversation as it would appear in the history list, or `null` when
+   * there is nothing worth keeping.
+   *
+   * The session comes from the live snapshot rather than the prop, because the
+   * prop's cursor is from whenever this chat was opened and the conversation
+   * has moved on since.
+   */
+  const archivable = (): ArchivedChat | null => {
+    const session = agent.session;
+    if (session === undefined) return null;
+
+    const firstQuestion = agent.data.messages
+      .filter((message) => message.role === "user")
+      .at(0)
+      ?.parts.flatMap((part) => (part.type === "text" ? [part.text] : []))
+      .join("")
+      .trim();
+
+    // An empty chat, or one holding only an attachment with no question, is
+    // not worth a row someone has to read past.
+    if (!firstQuestion) return null;
+
+    return {
+      savedAt: Date.now(),
+      session,
+      title: titleFrom(firstQuestion),
+    };
+  };
+
   const startNewChat = () => {
-    clearStoredSession();
-    agent.reset();
     setAttachmentError(null);
+    onSwitch(undefined, archivable());
+  };
+
+  const openChat = (chat: ArchivedChat) => {
+    if (chat.session.sessionId === agent.session?.sessionId) return;
+    setAttachmentError(null);
+    onSwitch(chat.session, archivable());
   };
 
   // HITL requests ride on dynamic-tool parts. Scan every message, not just the
@@ -223,16 +303,23 @@ function MathsEngine({
             were disabled during that state it would be the one button that
             could help and the one button out of reach. `reset` aborts whatever
             is in flight, so using it mid-answer is safe. */}
-        {agent.data.messages.length > 0 ? (
-          <Button
-            className="ml-auto h-8 px-3 text-sm"
-            onClick={startNewChat}
-            type="button"
-            variant="outline"
-          >
-            New chat
-          </Button>
-        ) : null}
+        <div className="ml-auto flex items-center gap-1">
+          <ChatHistoryMenu
+            chats={history}
+            onClear={onClearHistory}
+            onOpen={openChat}
+          />
+          {agent.data.messages.length > 0 ? (
+            <Button
+              className="h-8 px-3 text-sm"
+              onClick={startNewChat}
+              type="button"
+              variant="outline"
+            >
+              New chat
+            </Button>
+          ) : null}
+        </div>
       </header>
 
       <Conversation className="flex-1">

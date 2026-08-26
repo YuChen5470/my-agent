@@ -412,8 +412,14 @@ export const usePromptInputReferencedSources = () => {
 // types. base-ui hands its handlers a BaseUIEvent wrapper, not a bare DOM
 // Event, so the literal `Event` / `React.MouseEvent` annotations these
 // handlers shipped with do not typecheck against base-ui 1.7.
-type DropdownItemSelectEvent = Parameters<
-  NonNullable<ComponentProps<typeof DropdownMenuItem>["onSelect"]>
+//
+// Activation is `onClick`, not `onSelect`. base-ui's menu item renders a
+// `<div>` and documents `onClick` as its click handler; `onSelect` typechecks
+// only because a div accepts the DOM text-selection handler of that name,
+// which never fires when a menu item is chosen. These items shipped wired to
+// `onSelect` and so did nothing at all.
+type DropdownItemClickEvent = Parameters<
+  NonNullable<ComponentProps<typeof DropdownMenuItem>["onClick"]>
 >[0];
 
 type InputGroupButtonClickEvent = Parameters<
@@ -432,16 +438,12 @@ export const PromptInputActionAddAttachments = ({
 }: PromptInputActionAddAttachmentsProps) => {
   const attachments = usePromptInputAttachments();
 
-  const handleSelect = useCallback(
-    (e: DropdownItemSelectEvent) => {
-      e.preventDefault();
-      attachments.openFileDialog();
-    },
-    [attachments]
-  );
+  const handleClick = useCallback(() => {
+    attachments.openFileDialog();
+  }, [attachments]);
 
   return (
-    <DropdownMenuItem {...props} onSelect={handleSelect}>
+    <DropdownMenuItem {...props} onClick={handleClick}>
       <ImageIcon className="mr-2 size-4" /> {label}
     </DropdownMenuItem>
   );
@@ -455,14 +457,14 @@ export type PromptInputActionAddScreenshotProps = ComponentProps<
 
 export const PromptInputActionAddScreenshot = ({
   label = "Take screenshot",
-  onSelect,
+  onClick,
   ...props
 }: PromptInputActionAddScreenshotProps) => {
   const attachments = usePromptInputAttachments();
 
-  const handleSelect = useCallback(
-    async (event: DropdownItemSelectEvent) => {
-      onSelect?.(event);
+  const handleClick = useCallback(
+    async (event: DropdownItemClickEvent) => {
+      onClick?.(event);
       if (event.defaultPrevented) {
         return;
       }
@@ -482,11 +484,11 @@ export const PromptInputActionAddScreenshot = ({
         throw error;
       }
     },
-    [onSelect, attachments]
+    [onClick, attachments]
   );
 
   return (
-    <DropdownMenuItem {...props} onSelect={handleSelect}>
+    <DropdownMenuItem {...props} onClick={handleClick}>
       <Monitor className="mr-2 size-4" />
       {label}
     </DropdownMenuItem>

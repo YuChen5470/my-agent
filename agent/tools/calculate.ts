@@ -6,6 +6,7 @@ import {
   differentiate,
   evaluateExpression,
   formatValue,
+  parseExpression,
   simplifyExpression,
 } from "../lib/safe-math";
 
@@ -93,12 +94,31 @@ export default defineTool({
       }
 
       const node = simplifyExpression(expression);
+      const result = node.toString();
+
+      /**
+       * Detect a simplify fixpoint and say so in the result.
+       *
+       * The model was observed simplifying its own answer three or four times
+       * in a row on longer problems, which costs a model call per attempt and
+       * burns the free tier's daily quota for no change in the maths. Both
+       * sides are compared as parsed trees so that formatting alone — "x^2+1"
+       * against "x^2 + 1" — does not read as progress.
+       *
+       * The instruction lives in `method` because that is the field the model
+       * already quotes back when narrating a step.
+       */
+      const alreadySimplest = parseExpression(expression).toString() === result;
+
       return {
         ok: true as const,
         operation,
         expression,
-        result: node.toString(),
-        method: METHOD_NOTES.simplify,
+        result,
+        alreadySimplest,
+        method: alreadySimplest
+          ? "Already in its simplest form — simplifying changed nothing. State the expression as it stands and move on; do not call simplify on it again."
+          : METHOD_NOTES.simplify,
       };
     } catch (error) {
       // A parse failure is the student's typo far more often than a bug, so

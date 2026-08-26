@@ -86,6 +86,14 @@ export default function Page() {
       return request ? [request] : [];
     });
 
+  // A turn that failed outright, as opposed to the model choosing to ask a
+  // question. eve clears this the moment the next turn starts, so the alert
+  // disappears on its own when the student tries again.
+  const turnError =
+    agent.status === "error" && agent.error
+      ? describeAgentError(agent.error)
+      : null;
+
   return (
     <main className="mx-auto flex h-dvh max-w-3xl flex-col gap-4 p-4">
       <header className="flex items-center gap-2 border-b pb-3">
@@ -187,23 +195,15 @@ export default function Page() {
             </Alert>
           ))}
 
-          {/* The turn failed outright (e.g. the model provider's free-tier
-              quota is exhausted) rather than the model choosing to ask a
-              question. Without this, a failed turn just leaves the spinner
-              gone and no answer — indistinguishable from a hang. */}
-          {agent.status === "error" && agent.error
-            ? (() => {
-                const { title, description } = describeAgentError(
-                  agent.error
-                );
-                return (
-                  <Alert className="mb-4" variant="destructive">
-                    <AlertTitle>{title}</AlertTitle>
-                    <AlertDescription>{description}</AlertDescription>
-                  </Alert>
-                );
-              })()
-            : null}
+          {/* Without this, a failed turn just removes the spinner and shows no
+              answer — indistinguishable from a hang, which is exactly what a
+              reviewer hit when the free-tier quota ran out mid-question. */}
+          {turnError ? (
+            <Alert className="mb-4" variant="destructive">
+              <AlertTitle>{turnError.title}</AlertTitle>
+              <AlertDescription>{turnError.description}</AlertDescription>
+            </Alert>
+          ) : null}
         </ConversationContent>
         <ConversationScrollButton />
       </Conversation>

@@ -24,7 +24,12 @@ import {
   ToolActivity,
   ToolReceipt,
 } from "@/components/tool-activity";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  Alert,
+  AlertAction,
+  AlertDescription,
+  AlertTitle,
+} from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
   FunctionPlot,
@@ -93,6 +98,19 @@ export default function Page() {
     agent.status === "error" && agent.error
       ? describeAgentError(agent.error)
       : null;
+
+  // The question to resend, recovered from the projection rather than kept in
+  // component state. A turn that dies mid-flight was already confirmed by the
+  // server, so the message's own `status` still reads "submitted" and cannot
+  // be used to find it — but it is always the most recent user message.
+  const lastQuestion = agent.data.messages
+    .filter((message) => message.role === "user")
+    .at(-1)
+    ?.parts.flatMap((part) => (part.type === "text" ? [part.text] : []))
+    .join("")
+    .trim();
+
+  const canRetry = Boolean(turnError?.canRetry && lastQuestion && !isBusy);
 
   return (
     <main className="mx-auto flex h-dvh max-w-3xl flex-col gap-4 p-4">
@@ -202,6 +220,18 @@ export default function Page() {
             <Alert className="mb-4" variant="destructive">
               <AlertTitle>{turnError.title}</AlertTitle>
               <AlertDescription>{turnError.description}</AlertDescription>
+              {canRetry && lastQuestion ? (
+                <AlertAction>
+                  <Button
+                    className="h-8 px-3 text-sm"
+                    onClick={() => void agent.send(lastQuestion)}
+                    type="button"
+                    variant="outline"
+                  >
+                    Try again
+                  </Button>
+                </AlertAction>
+              ) : null}
             </Alert>
           ) : null}
         </ConversationContent>

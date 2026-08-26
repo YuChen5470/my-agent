@@ -16,6 +16,16 @@
 export function describeAgentError(error: Error): {
   title: string;
   description: string;
+  /**
+   * Whether resending the same question could plausibly work.
+   *
+   * Gemini's free tier caps requests per minute as well as per day, and a
+   * chatty turn trips the per-minute cap first, so a retry a moment later
+   * often does succeed — offering it is not false hope. A conversation that
+   * has spent its whole token budget is the exception: the same question in
+   * the same session fails identically every time.
+   */
+  canRetry: boolean;
 } {
   const code = error.name.toUpperCase();
   const message = error.message.toLowerCase();
@@ -25,22 +35,21 @@ export function describeAgentError(error: Error): {
   // "try again later" here would be wrong — this one needs a fresh chat.
   if (code === "SESSION_TOKEN_LIMIT_REACHED") {
     return {
+      canRetry: false,
       title: "This conversation got too long",
       description:
-        "This chat has used up its budget. Please start a new one — your working out above stays readable.",
+        "This chat has used up its budget. Please reload the page to start a fresh one — your working out above stays readable until you do.",
     };
   }
 
   if (code === "TIMEOUT") {
     return {
+      canRetry: true,
       title: "That took too long",
-      description:
-        "The answer did not come back in time. Please try asking again.",
+      description: "The answer did not come back in time.",
     };
   }
 
-  // A daily free-tier quota is not worth retrying in the moment, so the copy
-  // deliberately does not invite an immediate retry.
   const isRateLimit =
     message.includes("429") ||
     message.includes("resource_exhausted") ||
@@ -51,15 +60,16 @@ export function describeAgentError(error: Error): {
 
   if (isRateLimit) {
     return {
+      canRetry: true,
       title: "Out of requests for now",
       description:
-        "The model's free-tier quota has been used up. Please try again later.",
+        "The free-tier quota is used up. Waiting a minute often clears it; if not, the daily limit has gone and it resets tomorrow.",
     };
   }
 
   return {
+    canRetry: true,
     title: "Something went wrong",
-    description:
-      "That question could not be answered. Please try again, or rephrase it.",
+    description: "That question could not be answered.",
   };
 }

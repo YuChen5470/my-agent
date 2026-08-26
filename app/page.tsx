@@ -44,9 +44,15 @@ import {
 } from "@/components/function-plot";
 import { describeAgentError } from "@/lib/agent-error";
 import { prepareImage } from "@/lib/prepare-image";
+import {
+  clearStoredSession,
+  readStoredSession,
+  writeStoredSession,
+} from "@/lib/stored-session";
 import { SigmaIcon } from "lucide-react";
 import { useState } from "react";
 import type { UserContent } from "ai";
+import type { ClientSessionState } from "eve/client";
 
 /**
  * Recognise a successful plot_function result so it can be drawn as a graph.
@@ -95,10 +101,44 @@ function asPlot(part: {
 const MAX_ATTACHMENTS = 3;
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 
+/**
+ * Resolves the remembered session before the chat mounts.
+ *
+ * Read during the render rather than from an effect: `useEveAgent` reads its
+ * session configuration once, when it builds its internal store, so an effect
+ * would arrive a beat too late to restore anything. The initialiser is guarded
+ * for the server prerender, where there is no `localStorage`, and runs again
+ * during hydration — by which point there is. The markup is the same either
+ * way, because a restored conversation only arrives after mount.
+ */
 export default function Page() {
-  const agent = useEveAgent();
+  const [initialSession] = useState<ClientSessionState | undefined>(() =>
+    typeof window === "undefined" ? undefined : readStoredSession()
+  );
+
+  return <MathsEngine initialSession={initialSession} />;
+}
+
+function MathsEngine({
+  initialSession,
+}: {
+  initialSession: ClientSessionState | undefined;
+}) {
+  const agent = useEveAgent({
+    initialSession,
+    // Replay the stored session's history, and pick up a turn that was still
+    // running when the page was closed.
+    resume: initialSession !== undefined,
+    onSessionChange: writeStoredSession,
+  });
   const isBusy = agent.status === "submitted" || agent.status === "streaming";
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
+
+  const startNewChat = () => {
+    clearStoredSession();
+    agent.reset();
+    setAttachmentError(null);
+  };
 
   // HITL requests ride on dynamic-tool parts. Scan every message, not just the
   // last one: an unrelated turn can append newer messages while a question
@@ -144,6 +184,20 @@ export default function Page() {
             Explains method. Never does the arithmetic itself.
           </p>
         </div>
+        {/* A conversation now outlives the tab, so there has to be a way out
+            of one — otherwise a session that has spent its token budget is
+            restored on every visit and the app is permanently stuck. */}
+        {agent.data.messages.length > 0 ? (
+          <Button
+            className="ml-auto h-8 px-3 text-sm"
+            disabled={isBusy}
+            onClick={startNewChat}
+            type="button"
+            variant="outline"
+          >
+            New chat
+          </Button>
+        ) : null}
       </header>
 
       <Conversation className="flex-1">

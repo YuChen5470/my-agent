@@ -2,7 +2,7 @@
 
 An AI tutor for university level mathematicians that explains methods rather than just giving over answers to students. It never does arithmetic or algebra "in its head", every number or symbolic result it states comes back from a verified tool call. This means that what students see on screen has actually be computed, not guessed by the language model. For worded problems, it states its interpretation and assumptions and asks the students to confirm its interpretations before calculating.
 
-Built with Next.js and the [eve](https://www.npmjs.com/package/eve) agent framework, running Gemini as the underlying model.
+Built with Next.js and the [eve](https://www.npmjs.com/package/eve) agent framework, running Gemini as the underlying model. Conversations are durable eve sessions, so refreshing the page keeps your working out — and a turn still running when you closed the tab is picked back up.
 
 ## Tools
 

@@ -38,7 +38,7 @@ export function describeAgentError(error: Error): {
       canRetry: false,
       title: "This conversation got too long",
       description:
-        "This chat has used up its budget. Please reload the page to start a fresh one — your working out above stays readable until you do.",
+        "This chat has used up its budget. Use New chat above to start a fresh one — this conversation stays readable until you do.",
     };
   }
 

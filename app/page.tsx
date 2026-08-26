@@ -50,7 +50,7 @@ import {
   writeStoredSession,
 } from "@/lib/stored-session";
 import { SigmaIcon } from "lucide-react";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import type { UserContent } from "ai";
 import type { ClientSessionState } from "eve/client";
 
@@ -101,22 +101,50 @@ function asPlot(part: {
 const MAX_ATTACHMENTS = 3;
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 
+/** Subscribes to nothing; only the server/client snapshot split is wanted. */
+const noSubscribe = () => () => {};
+
 /**
- * Resolves the remembered session before the chat mounts.
+ * False while the server renders and through hydration, true afterwards.
  *
- * Read during the render rather than from an effect: `useEveAgent` reads its
- * session configuration once, when it builds its internal store, so an effect
- * would arrive a beat too late to restore anything. The initialiser is guarded
- * for the server prerender, where there is no `localStorage`, and runs again
- * during hydration — by which point there is. The markup is the same either
- * way, because a restored conversation only arrives after mount.
+ * `useSyncExternalStore` is what makes that safe: React is required to use the
+ * server snapshot for the hydrating render, so the first client pass matches
+ * the HTML exactly, and the switch happens in the re-render after.
+ */
+function useIsHydrated(): boolean {
+  return useSyncExternalStore(
+    noSubscribe,
+    () => true,
+    () => false
+  );
+}
+
+/**
+ * Restores the remembered session once the page is interactive.
+ *
+ * Two constraints meet here. `useEveAgent` reads its session configuration
+ * once, when it builds its internal store, so the session has to be present at
+ * the chat's first render — passing it later does nothing, and the documented
+ * way to point at a different session is to remount. But handing it over
+ * during hydration would break hydration: resuming immediately reports a busy
+ * agent and draws the thinking indicator, which the server never rendered.
+ *
+ * So the chat mounts session-less to match the server HTML, then the `key`
+ * flips and it remounts with the stored session, which is the point at which
+ * `resume` replays the conversation.
  */
 export default function Page() {
-  const [initialSession] = useState<ClientSessionState | undefined>(() =>
+  const hydrated = useIsHydrated();
+  const [storedSession] = useState<ClientSessionState | undefined>(() =>
     typeof window === "undefined" ? undefined : readStoredSession()
   );
 
-  return <MathsEngine initialSession={initialSession} />;
+  return (
+    <MathsEngine
+      initialSession={hydrated ? storedSession : undefined}
+      key={hydrated ? "restored" : "initial"}
+    />
+  );
 }
 
 function MathsEngine({
@@ -186,11 +214,18 @@ function MathsEngine({
         </div>
         {/* A conversation now outlives the tab, so there has to be a way out
             of one — otherwise a session that has spent its token budget is
-            restored on every visit and the app is permanently stuck. */}
+            restored on every visit and the app is permanently stuck.
+
+            Deliberately not disabled while busy. Resuming a session whose turn
+            died — the server restarted or redeployed mid-answer — leaves the
+            client waiting on events that will never arrive, and cancelling
+            does not clear it because there is nothing live to cancel. If this
+            were disabled during that state it would be the one button that
+            could help and the one button out of reach. `reset` aborts whatever
+            is in flight, so using it mid-answer is safe. */}
         {agent.data.messages.length > 0 ? (
           <Button
             className="ml-auto h-8 px-3 text-sm"
-            disabled={isBusy}
             onClick={startNewChat}
             type="button"
             variant="outline"

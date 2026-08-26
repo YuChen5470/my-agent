@@ -47,15 +47,15 @@ import { prepareImage } from "@/lib/prepare-image";
 import { readStoredSession, writeStoredSession } from "@/lib/stored-session";
 import {
   type ArchivedChat,
-  archiveChat,
   readHistory,
+  rememberChat,
   removeChat,
   titleFrom,
 } from "@/lib/chat-history";
 import { ChatSidebar } from "@/components/chat-sidebar";
 import { PanelLeftIcon } from "lucide-react";
 import { SigmaIcon } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useIsHydrated } from "@/lib/use-is-hydrated";
 import type { UserContent } from "ai";
 import type { ClientSessionState } from "eve/client";
@@ -129,54 +129,60 @@ export default function Page() {
   const [history, setHistory] = useState<ArchivedChat[]>(() =>
     typeof window === "undefined" ? [] : readHistory()
   );
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  /**
-   * Files the conversation being left behind, then points at another.
-   *
-   * `next` is `undefined` for a brand new chat. The remount that actually
-   * switches conversations comes from the `key` below, which is why this only
-   * has to move the pointer.
-   */
-  const switchTo = (
-    next: ClientSessionState | undefined,
-    leaving: ArchivedChat | null
-  ) => {
-    if (leaving !== null) {
-      setHistory(archiveChat(leaving));
-    }
+  /** Points at another conversation; `undefined` starts a fresh one. */
+  const switchTo = (next: ClientSessionState | undefined) => {
+    setSidebarOpen(false);
+    if (next?.sessionId === active?.sessionId) return;
     writeStoredSession(next);
     setActive(next);
   };
 
   return (
-    <MathsEngine
-      history={history}
-      initialSession={hydrated ? active : undefined}
-      /**
-       * Keyed by the conversation, so choosing a different one rebuilds the
-       * agent around it — `useEveAgent` reads its session once, at store
-       * construction, so a remount is the documented way to move.
-       */
-      key={hydrated ? (active?.sessionId ?? "new") : "initial"}
-      onDeleteChat={(sessionId) => setHistory(removeChat(sessionId))}
-      onSwitch={switchTo}
-    />
+    <div className="flex h-dvh">
+      {/*
+        A sibling of the chat, never a child of it.
+
+        The chat below is remounted whenever the conversation changes, because
+        `useEveAgent` reads its session once when it builds its store and a
+        remount is the documented way to point it somewhere else. The sidebar
+        used to live inside that subtree, so every switch tore the list down
+        and rebuilt it — the list visibly blinked out and came back. Out here
+        it survives.
+      */}
+      <ChatSidebar
+        activeSessionId={active?.sessionId}
+        chats={history}
+        onClose={() => setSidebarOpen(false)}
+        onDelete={(sessionId) => setHistory(removeChat(sessionId))}
+        onNewChat={() => switchTo(undefined)}
+        onOpen={(chat) => switchTo(chat.session)}
+        open={sidebarOpen}
+      />
+
+      <MathsEngine
+        initialSession={hydrated ? active : undefined}
+        /**
+         * Keyed by the conversation, so choosing a different one rebuilds the
+         * agent around it.
+         */
+        key={hydrated ? (active?.sessionId ?? "new") : "initial"}
+        onOpenSidebar={() => setSidebarOpen(true)}
+        onRemember={(chat) => setHistory(rememberChat(chat))}
+      />
+    </div>
   );
 }
 
 function MathsEngine({
-  history,
   initialSession,
-  onDeleteChat,
-  onSwitch,
+  onOpenSidebar,
+  onRemember,
 }: {
-  history: ArchivedChat[];
   initialSession: ClientSessionState | undefined;
-  onDeleteChat: (sessionId: string) => void;
-  onSwitch: (
-    next: ClientSessionState | undefined,
-    leaving: ArchivedChat | null
-  ) => void;
+  onOpenSidebar: () => void;
+  onRemember: (chat: ArchivedChat) => void;
 }) {
   const agent = useEveAgent({
     initialSession,
@@ -187,12 +193,11 @@ function MathsEngine({
   });
   const isBusy = agent.status === "submitted" || agent.status === "streaming";
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   /**
    * How this conversation is labelled in the sidebar: its opening question.
    *
-   * `null` for a chat with nothing in it yet — including one holding only an
+   * Empty for a chat with nothing in it yet — including one holding only an
    * attachment and no words, which has no sensible title and is not worth a
    * row someone has to read past.
    */
@@ -203,39 +208,32 @@ function MathsEngine({
     .join("")
     .trim();
 
-  const currentTitle = firstQuestion ? titleFrom(firstQuestion) : null;
+  const sessionId = agent.session?.sessionId;
+  const streamIndex = agent.session?.streamIndex;
 
   /**
-   * The conversation as it would appear in the history list, or `null` when
-   * there is nothing worth keeping.
+   * Files the conversation as soon as it has a name, rather than when it is
+   * left behind.
    *
-   * The session comes from the live snapshot rather than the prop, because the
-   * prop's cursor is from whenever this chat was opened and the conversation
-   * has moved on since.
+   * Waiting until the student navigated away meant a chat abandoned by closing
+   * the tab never reached the list at all. Recording it the moment it has both
+   * an id and an opening question also means the sidebar no longer needs to be
+   * told what the live conversation is called, which is what allowed it out of
+   * this component and stopped the list flickering.
+   *
+   * `rememberChat` ignores a session it already holds, so this settling
+   * repeatedly cannot reorder or relabel anything.
    */
-  const archivable = (): ArchivedChat | null => {
-    const session = agent.session;
-    if (session === undefined || currentTitle === null) return null;
+  useEffect(() => {
+    if (sessionId === undefined || streamIndex === undefined) return;
+    if (!firstQuestion) return;
 
-    return {
+    onRemember({
       savedAt: Date.now(),
-      session,
-      title: currentTitle,
-    };
-  };
-
-  const startNewChat = () => {
-    setAttachmentError(null);
-    setSidebarOpen(false);
-    onSwitch(undefined, archivable());
-  };
-
-  const openChat = (chat: ArchivedChat) => {
-    setSidebarOpen(false);
-    if (chat.session.sessionId === agent.session?.sessionId) return;
-    setAttachmentError(null);
-    onSwitch(chat.session, archivable());
-  };
+      session: { sessionId, streamIndex },
+      title: titleFrom(firstQuestion),
+    });
+  }, [sessionId, streamIndex, firstQuestion, onRemember]);
 
   // HITL requests ride on dynamic-tool parts. Scan every message, not just the
   // last one: an unrelated turn can append newer messages while a question
@@ -272,24 +270,12 @@ function MathsEngine({
   const canRetry = Boolean(turnError?.canRetry && lastQuestion && !isBusy);
 
   return (
-    <div className="flex h-dvh">
-      <ChatSidebar
-        chats={history}
-        currentSessionId={agent.session?.sessionId}
-        currentTitle={currentTitle}
-        onClose={() => setSidebarOpen(false)}
-        onDelete={onDeleteChat}
-        onNewChat={startNewChat}
-        onOpen={openChat}
-        open={sidebarOpen}
-      />
-
-      <main className="mx-auto flex min-w-0 max-w-3xl flex-1 flex-col gap-4 p-4">
+    <main className="mx-auto flex min-w-0 max-w-3xl flex-1 flex-col gap-4 p-4">
       <header className="flex items-center gap-2 border-b pb-3">
         <Button
           aria-label="Show chats"
           className="size-8 shrink-0 p-0 md:hidden"
-          onClick={() => setSidebarOpen(true)}
+          onClick={onOpenSidebar}
           type="button"
           variant="ghost"
         >
@@ -518,7 +504,6 @@ function MathsEngine({
           />
         </PromptInputFooter>
       </PromptInput>
-      </main>
-    </div>
+    </main>
   );
 }

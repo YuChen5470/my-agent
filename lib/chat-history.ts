@@ -53,12 +53,13 @@ export function readHistory(): ArchivedChat[] {
       return [];
     }
 
-    // Drop unrecognised entries rather than the whole list, so one bad record
-    // from an older build cannot lose every other conversation.
-    return parsed
-      .filter(isArchivedChat)
-      .sort((a, b) => b.savedAt - a.savedAt)
-      .slice(0, MAX_CHATS);
+    // Stored order is preserved rather than re-sorted: the list is written
+    // newest-first and a row never moves, so sorting could only introduce the
+    // shuffling this is meant to avoid.
+    //
+    // Unrecognised entries are dropped individually, so one bad record from an
+    // older build cannot take every other conversation with it.
+    return parsed.filter(isArchivedChat).slice(0, MAX_CHATS);
   } catch {
     return [];
   }
@@ -83,19 +84,27 @@ export function titleFrom(firstMessage: string): string {
 }
 
 /**
- * Files a conversation away, replacing any earlier entry for the same session.
+ * Records a conversation the first time it has a name, and leaves it alone
+ * afterwards.
  *
- * Re-archiving matters: a student can open an old chat, ask two more
- * questions, and file it again. That should update the one entry rather than
- * leave a stale duplicate pointing at the same conversation.
+ * A chat holds its place in the list for good. Reopening an old conversation
+ * and asking two more questions must not shuffle it to the top: the list is
+ * something a student learns the shape of, and rows that move when touched
+ * make it useless for finding the chat you half-remember. So a session already
+ * on the list is returned untouched — same position, same timestamp, same
+ * title, which stays the question the conversation opened with.
  */
-export function archiveChat(chat: ArchivedChat): ArchivedChat[] {
-  const others = readHistory().filter(
-    (existing) => existing.session.sessionId !== chat.session.sessionId
-  );
-  const next = [chat, ...others]
-    .sort((a, b) => b.savedAt - a.savedAt)
-    .slice(0, MAX_CHATS);
+export function rememberChat(chat: ArchivedChat): ArchivedChat[] {
+  const existing = readHistory();
+  if (
+    existing.some(
+      (entry) => entry.session.sessionId === chat.session.sessionId
+    )
+  ) {
+    return existing;
+  }
+
+  const next = [chat, ...existing].slice(0, MAX_CHATS);
   writeHistory(next);
   return next;
 }

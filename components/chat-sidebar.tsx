@@ -9,14 +9,8 @@ import { useEffect, useState } from "react";
 
 export interface ChatSidebarProps {
   chats: ArchivedChat[];
-  /** Title of the conversation on screen, or null when it is empty. */
-  currentTitle: string | null;
-  /**
-   * Session on screen, so it is not also listed below as somewhere to go.
-   * A conversation can be both open and already archived — reopening a filed
-   * chat leaves it in the list — and showing it twice reads as two chats.
-   */
-  currentSessionId: string | undefined;
+  /** The conversation on screen, marked in the list rather than duplicated. */
+  activeSessionId: string | undefined;
   onNewChat: () => void;
   onOpen: (chat: ArchivedChat) => void;
   onDelete: (sessionId: string) => void;
@@ -27,17 +21,13 @@ export interface ChatSidebarProps {
 
 export function ChatSidebar({
   chats,
-  currentTitle,
-  currentSessionId,
+  activeSessionId,
   onNewChat,
   onOpen,
   onDelete,
   open,
   onClose,
 }: ChatSidebarProps) {
-  const others = chats.filter(
-    (chat) => chat.session.sessionId !== currentSessionId
-  );
   /**
    * The clock behind the "3h ago" labels.
    *
@@ -102,34 +92,35 @@ export function ChatSidebar({
         </p>
 
         <div className="-mr-1 flex-1 overflow-y-auto pr-1">
-          {currentTitle === null && others.length === 0 ? (
+          {chats.length === 0 ? (
             <p className="px-2 py-1 text-muted-foreground text-xs">
               Your chats will appear here.
             </p>
           ) : null}
 
-          {/* The conversation on screen, shown so the list accounts for every
-              chat rather than seeming to lose the one being worked on. */}
-          {currentTitle === null ? null : (
-            <div className="rounded-md bg-accent px-2 py-1.5">
-              <p className="truncate text-sm">{currentTitle}</p>
-              <p className="text-muted-foreground text-xs">Current</p>
-            </div>
-          )}
-
-          {others.map((chat) => (
+          {chats.map((chat) => {
+            const isActive = chat.session.sessionId === activeSessionId;
+            return (
             <div
-              className="group/chat flex items-center gap-1 rounded-md hover:bg-accent"
+              className={cn(
+                "group/chat flex items-center gap-1 rounded-md",
+                isActive ? "bg-accent" : "hover:bg-accent"
+              )}
               key={chat.session.sessionId}
             >
               <button
+                aria-current={isActive ? "true" : undefined}
                 className="min-w-0 flex-1 px-2 py-1.5 text-left"
                 onClick={() => onOpen(chat)}
                 type="button"
               >
                 <span className="block truncate text-sm">{chat.title}</span>
                 <span className="block text-muted-foreground text-xs">
-                  {hydrated ? describeAge(chat.savedAt, now) : ""}
+                  {isActive
+                    ? "Current"
+                    : hydrated
+                      ? describeAge(chat.savedAt, now)
+                      : ""}
                 </span>
               </button>
               <Button
@@ -142,7 +133,8 @@ export function ChatSidebar({
                 <Trash2Icon className="size-3.5" />
               </Button>
             </div>
-          ))}
+            );
+          })}
         </div>
       </aside>
     </>

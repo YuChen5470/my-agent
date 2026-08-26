@@ -1,6 +1,7 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 import { describe, evaluateExpression, formatValue } from "../lib/safe-math";
+import { callKeyOf, memoiseForTurn } from "../lib/turn-memo";
 
 /**
  * Above this, trial-division factorisation stops being instant. mathjs has no
@@ -24,7 +25,37 @@ export default defineTool({
       .optional()
       .describe("The second integer, for gcd, lcm and mod."),
   }),
-  async execute({ operation, a, b }) {
+  async execute({ operation, a, b }, ctx) {
+    const { value, repeated } = memoiseForTurn(
+      `${ctx.session.id}:${ctx.session.turn.id}`,
+      callKeyOf("number_theory", { a, b, operation }),
+      () => compute({ a, b, operation })
+    );
+
+    if (!(repeated && value?.ok)) {
+      return value;
+    }
+
+    // See turn-memo: a repeat returns the known answer plus a note, rather
+    // than a recomputed one that reads like a new step.
+    return {
+      ...value,
+      repeated: true as const,
+      method: `${value.method} You already ran this exact computation earlier in this answer, so nothing new was computed. Quote the result and move on.`,
+    };
+  },
+});
+
+function compute({
+  operation,
+  a,
+  b,
+}: {
+  operation: "isPrime" | "factorise" | "gcd" | "lcm" | "mod";
+  a: number;
+  b?: number;
+}) {
+  {
     const needsTwo = ["gcd", "lcm", "mod"] as const;
     if ((needsTwo as readonly string[]).includes(operation) && b === undefined) {
       return {
@@ -124,8 +155,8 @@ export default defineTool({
         error: `That could not be computed: ${describe(error)}`,
       };
     }
-  },
-});
+  }
+}
 
 function isPrime(n: number): boolean {
   if (!Number.isInteger(n) || n < 2) return false;

@@ -9,6 +9,7 @@ import {
   parseExpression,
   simplifyExpression,
 } from "../lib/safe-math";
+import { callKeyOf, memoiseForTurn } from "../lib/turn-memo";
 
 /**
  * Operations this tool can actually perform, versus those that need a real CAS.
@@ -51,7 +52,7 @@ export default defineTool({
         "Values to substitute for variables before evaluating, e.g. { x: 2 }."
       ),
   }),
-  async execute({ operation, expression, variable = "x", at = {} }) {
+  async execute({ operation, expression, variable = "x", at = {} }, ctx) {
     if ((NEEDS_CAS as readonly string[]).includes(operation)) {
       return {
         ok: false as const,
@@ -60,6 +61,38 @@ export default defineTool({
       };
     }
 
+    const { value, repeated } = memoiseForTurn(
+      `${ctx.session.id}:${ctx.session.turn.id}`,
+      callKeyOf("calculate", { at, expression, operation, variable }),
+      () => compute({ at, expression, operation, variable })
+    );
+
+    if (!(repeated && value.ok)) {
+      return value;
+    }
+
+    // Same inputs, same answer — say so rather than presenting a recomputed
+    // result as if it were a new step.
+    return {
+      ...value,
+      repeated: true as const,
+      method: `${value.method} You already ran this exact calculation earlier in this answer, so nothing new was computed. Quote the result and move to the next step; do not call this tool on ${expression} again.`,
+    };
+  },
+});
+
+function compute({
+  operation,
+  expression,
+  variable,
+  at,
+}: {
+  operation: (typeof SUPPORTED)[number] | (typeof NEEDS_CAS)[number];
+  expression: string;
+  variable: string;
+  at: Record<string, number>;
+}) {
+  {
     try {
       if (operation === "evaluate") {
         const value = evaluateExpression(expression, at);
@@ -132,5 +165,5 @@ export default defineTool({
             : `That could not be computed: ${describe(error)}`,
       };
     }
-  },
-});
+  }
+}

@@ -1,36 +1,47 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# The Maths Engine
 
-## Getting Started
+An AI tutor for university level mathematicians that explains methods rather than just giving over answers to students. It never does arithmetic or algebra "in its head", every number or symbolic result it states comes back from a verified tool call. This means that what students see on screen has actually be computed, not guessed by the language model. For worded problems, it states its interpretation and assumptions and asks the students to confirm its interpretations before calculating.
 
-First, run the development server:
+Built with Next.js and the [eve](https://www.npmjs.com/package/eve) agent framework, running Gemini as the underlying model.
+
+## Tools
+
+Three tools do the actual maths. The model can only talk about a number once one of these has handed it back.
+
+**`calculate`** — the general-purpose one. Give it an expression like `"x^3 + 2x"` and tell it what to do with it: evaluate it (optionally plugging in values, e.g. `x = 2`), differentiate it with respect to a variable, or simplify it. It hands back the exact result, a decimal version when that's useful, and a short note on how it got there.
+
+**`number_theory`** — for whole-number questions: is this prime, what are its prime factors, what's the greatest common divisor or lowest common multiple of two numbers, what's the remainder. Give it one or two integers and which of those you want, and it returns the answer along with the reasoning, e.g. `12 = 2^2 x 3`.
+
+**`plot_function`** — turns an expression into a graph. Give it a function, a variable, and a range to plot over, and it samples the curve and draws it in the chat, splitting it into separate pieces wherever the function breaks (like at an asymptote).
+
+Alongside these, the agent also has a built-in `ask_question` tool it reaches for on worded problems — it uses this to lay out the assumptions it's making (starting height, direction, which constant to use) and get the student's confirmation before turning the words into an expression.
+
+## Running it locally
+
+Requires Node.js 20 or later.
+
+```bash
+git clone https://github.com/YuChen5470/my-agent.git
+cd my-agent
+npm install
+```
+
+Create a `.env.local` file in the project root with:
+
+```
+GOOGLE_GENERATIVE_AI_API_KEY=your_key_here
+```
+
+Get a key from [Google AI Studio](https://aistudio.google.com/apikey).
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Screenshots
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+![The Maths Engine plotting 1/x, with its asymptotes and end behaviour explained](docs/screenshot-plot.png)
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+![The Maths Engine differentiating x^3 + x^2 - e^2x term by term](docs/screenshot-derivative.png)

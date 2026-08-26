@@ -24,12 +24,13 @@ import {
   ToolActivity,
   ToolReceipt,
 } from "@/components/tool-activity";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
   FunctionPlot,
   type FunctionPlotProps,
 } from "@/components/function-plot";
+import { describeAgentError } from "@/lib/agent-error";
 import { SigmaIcon } from "lucide-react";
 
 /**
@@ -185,6 +186,24 @@ export default function Page() {
               </AlertDescription>
             </Alert>
           ))}
+
+          {/* The turn failed outright (e.g. the model provider's free-tier
+              quota is exhausted) rather than the model choosing to ask a
+              question. Without this, a failed turn just leaves the spinner
+              gone and no answer — indistinguishable from a hang. */}
+          {agent.status === "error" && agent.error
+            ? (() => {
+                const { title, description } = describeAgentError(
+                  agent.error
+                );
+                return (
+                  <Alert className="mb-4" variant="destructive">
+                    <AlertTitle>{title}</AlertTitle>
+                    <AlertDescription>{description}</AlertDescription>
+                  </Alert>
+                );
+              })()
+            : null}
         </ConversationContent>
         <ConversationScrollButton />
       </Conversation>

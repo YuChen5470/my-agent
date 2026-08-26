@@ -119,49 +119,81 @@ const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
  */
 export default function Page() {
   const hydrated = useIsHydrated();
-  const [active, setActive] = useState<ClientSessionState | undefined>(() =>
+
+  /**
+   * Which conversation the student picked, and which one is actually live.
+   *
+   * These have to be separate. `selected` decides what the chat is built
+   * around, so it must only change when the student chooses — changing it
+   * mid-answer would remount and interrupt them. But a brand new chat has no
+   * session until the agent creates one on the first message, so `selected`
+   * stays undefined while a real conversation exists. Comparing against it was
+   * why deleting a chat you had just started did nothing: the id never matched.
+   *
+   * `liveSessionId` is reported back by the agent when its session appears, and
+   * is what "which chat am I in" questions are answered with.
+   */
+  const [selected, setSelected] = useState<ClientSessionState | undefined>(() =>
     typeof window === "undefined" ? undefined : readStoredSession()
   );
+  const [liveSessionId, setLiveSessionId] = useState<string | undefined>(
+    () => selected?.sessionId
+  );
+  /** Bumped to force a fresh chat even when none was selected to begin with. */
+  const [newChatNonce, setNewChatNonce] = useState(0);
   const [history, setHistory] = useState<ArchivedChat[]>(() =>
     typeof window === "undefined" ? [] : readHistory()
   );
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  /** Points at another conversation; `undefined` starts a fresh one. */
-  const switchTo = (next: ClientSessionState | undefined) => {
+  const startNewChat = () => {
     setSidebarOpen(false);
-    if (next?.sessionId === active?.sessionId) return;
-    writeStoredSession(next);
-    setActive(next);
+    writeStoredSession(undefined);
+    setSelected(undefined);
+    setLiveSessionId(undefined);
+    setNewChatNonce((nonce) => nonce + 1);
+  };
+
+  const openChat = (chat: ArchivedChat) => {
+    setSidebarOpen(false);
+    if (chat.session.sessionId === liveSessionId) return;
+    writeStoredSession(chat.session);
+    setSelected(chat.session);
+    setLiveSessionId(chat.session.sessionId);
   };
 
   /**
    * Forgets a conversation, and leaves it if it is the one on screen.
    *
-   * Leaving is not a nicety. The chat being viewed is re-filed by the effect
-   * below whenever it has a session and an opening question, so deleting the
-   * active row without moving away had it reappear immediately — the button
-   * looked broken because its effect was undone in the same breath.
+   * Leaving is not optional: the open chat is re-filed as soon as it has a
+   * session and an opening question, so deleting its row without moving away
+   * had it reappear at once.
    */
   const deleteChat = (sessionId: string) => {
     setHistory(removeChat(sessionId));
-    if (sessionId === active?.sessionId) {
-      switchTo(undefined);
+    if (sessionId === liveSessionId) {
+      startNewChat();
     }
   };
 
   /*
-   * Both handed to the chat with a stable identity, because it files the open
-   * conversation from an effect that lists them as dependencies. A fresh
-   * function on every render re-ran that effect, and re-running it straight
-   * after a delete put the row back — which is what made the delete button
-   * look like it did nothing.
+   * Handed to the chat with stable identities, because it reports upwards from
+   * effects that list them as dependencies. A fresh function each render re-ran
+   * those effects constantly — including straight after a delete, which put the
+   * deleted row back.
    */
   const remember = useCallback(
     (chat: ArchivedChat) => setHistory(rememberChat(chat)),
     []
   );
   const openSidebar = useCallback(() => setSidebarOpen(true), []);
+  const handleSessionChange = useCallback(
+    (session: ClientSessionState | undefined) => {
+      writeStoredSession(session);
+      setLiveSessionId(session?.sessionId);
+    },
+    []
+  );
 
   return (
     <div className="flex h-dvh">
@@ -176,25 +208,31 @@ export default function Page() {
         it survives.
       */}
       <ChatSidebar
-        activeSessionId={active?.sessionId}
+        activeSessionId={liveSessionId}
         chats={history}
         onClose={() => setSidebarOpen(false)}
         onDelete={deleteChat}
-        onNewChat={() => switchTo(undefined)}
-        onOpen={(chat) => switchTo(chat.session)}
+        onNewChat={startNewChat}
+        onOpen={openChat}
         open={sidebarOpen}
         ready={hydrated}
       />
 
       <MathsEngine
-        initialSession={hydrated ? active : undefined}
+        initialSession={hydrated ? selected : undefined}
         /**
-         * Keyed by the conversation, so choosing a different one rebuilds the
-         * agent around it.
+         * Keyed by the chosen conversation, so picking a different one rebuilds
+         * the agent around it. The nonce covers starting a fresh chat from a
+         * fresh chat, where the key would otherwise not change.
          */
-        key={hydrated ? (active?.sessionId ?? "new") : "initial"}
+        key={
+          hydrated
+            ? (selected?.sessionId ?? `new-${newChatNonce}`)
+            : "initial"
+        }
         onOpenSidebar={openSidebar}
         onRemember={remember}
+        onSessionChange={handleSessionChange}
       />
     </div>
   );
@@ -204,17 +242,19 @@ function MathsEngine({
   initialSession,
   onOpenSidebar,
   onRemember,
+  onSessionChange,
 }: {
   initialSession: ClientSessionState | undefined;
   onOpenSidebar: () => void;
   onRemember: (chat: ArchivedChat) => void;
+  onSessionChange: (session: ClientSessionState | undefined) => void;
 }) {
   const agent = useEveAgent({
     initialSession,
     // Replay the stored session's history, and pick up a turn that was still
     // running when the page was closed.
     resume: initialSession !== undefined,
-    onSessionChange: writeStoredSession,
+    onSessionChange,
   });
   const isBusy = agent.status === "submitted" || agent.status === "streaming";
   const [attachmentError, setAttachmentError] = useState<string | null>(null);

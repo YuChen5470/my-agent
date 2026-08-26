@@ -275,6 +275,7 @@ function MathsEngine({
     <div className="flex h-dvh">
       <ChatSidebar
         chats={history}
+        currentSessionId={agent.session?.sessionId}
         currentTitle={currentTitle}
         onClose={() => setSidebarOpen(false)}
         onDelete={onDeleteChat}

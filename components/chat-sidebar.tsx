@@ -11,6 +11,12 @@ export interface ChatSidebarProps {
   chats: ArchivedChat[];
   /** Title of the conversation on screen, or null when it is empty. */
   currentTitle: string | null;
+  /**
+   * Session on screen, so it is not also listed below as somewhere to go.
+   * A conversation can be both open and already archived — reopening a filed
+   * chat leaves it in the list — and showing it twice reads as two chats.
+   */
+  currentSessionId: string | undefined;
   onNewChat: () => void;
   onOpen: (chat: ArchivedChat) => void;
   onDelete: (sessionId: string) => void;
@@ -22,12 +28,16 @@ export interface ChatSidebarProps {
 export function ChatSidebar({
   chats,
   currentTitle,
+  currentSessionId,
   onNewChat,
   onOpen,
   onDelete,
   open,
   onClose,
 }: ChatSidebarProps) {
+  const others = chats.filter(
+    (chat) => chat.session.sessionId !== currentSessionId
+  );
   /**
    * The clock behind the "3h ago" labels.
    *
@@ -92,7 +102,7 @@ export function ChatSidebar({
         </p>
 
         <div className="-mr-1 flex-1 overflow-y-auto pr-1">
-          {currentTitle === null && chats.length === 0 ? (
+          {currentTitle === null && others.length === 0 ? (
             <p className="px-2 py-1 text-muted-foreground text-xs">
               Your chats will appear here.
             </p>
@@ -107,7 +117,7 @@ export function ChatSidebar({
             </div>
           )}
 
-          {chats.map((chat) => (
+          {others.map((chat) => (
             <div
               className="group/chat flex items-center gap-1 rounded-md hover:bg-accent"
               key={chat.session.sessionId}

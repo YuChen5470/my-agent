@@ -97,7 +97,7 @@ const convertBlobUrlToDataUrl = async (url: string): Promise<string | null> => {
   }
 };
 
-const captureScreenshot = async (): Promise<File | null> => {
+export const captureScreenshot = async (): Promise<File | null> => {
   if (
     typeof navigator === "undefined" ||
     !navigator.mediaDevices?.getDisplayMedia

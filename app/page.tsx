@@ -14,11 +14,6 @@ import {
 } from "@/components/ai-elements/message";
 import {
   PromptInput,
-  PromptInputActionAddAttachments,
-  PromptInputActionAddScreenshot,
-  PromptInputActionMenu,
-  PromptInputActionMenuContent,
-  PromptInputActionMenuTrigger,
   PromptInputBody,
   PromptInputFooter,
   PromptInputSubmit,
@@ -26,6 +21,7 @@ import {
   PromptInputTools,
 } from "@/components/ai-elements/prompt-input";
 import { PromptAttachments } from "@/components/prompt-attachments";
+import { PromptAttachButtons } from "@/components/prompt-attach-buttons";
 import {
   ThinkingIndicator,
   ToolActivity,
@@ -139,6 +135,21 @@ export default function Page() {
     setActive(next);
   };
 
+  /**
+   * Forgets a conversation, and leaves it if it is the one on screen.
+   *
+   * Leaving is not a nicety. The chat being viewed is re-filed by the effect
+   * below whenever it has a session and an opening question, so deleting the
+   * active row without moving away had it reappear immediately — the button
+   * looked broken because its effect was undone in the same breath.
+   */
+  const deleteChat = (sessionId: string) => {
+    setHistory(removeChat(sessionId));
+    if (sessionId === active?.sessionId) {
+      switchTo(undefined);
+    }
+  };
+
   return (
     <div className="flex h-dvh">
       {/*
@@ -155,10 +166,11 @@ export default function Page() {
         activeSessionId={active?.sessionId}
         chats={history}
         onClose={() => setSidebarOpen(false)}
-        onDelete={(sessionId) => setHistory(removeChat(sessionId))}
+        onDelete={deleteChat}
         onNewChat={() => switchTo(undefined)}
         onOpen={(chat) => switchTo(chat.session)}
         open={sidebarOpen}
+        ready={hydrated}
       />
 
       <MathsEngine
@@ -490,13 +502,7 @@ function MathsEngine({
         </PromptInputBody>
         <PromptInputFooter>
           <PromptInputTools>
-            <PromptInputActionMenu>
-              <PromptInputActionMenuTrigger />
-              <PromptInputActionMenuContent>
-                <PromptInputActionAddAttachments label="Add a photo" />
-                <PromptInputActionAddScreenshot label="Take a screenshot" />
-              </PromptInputActionMenuContent>
-            </PromptInputActionMenu>
+            <PromptAttachButtons />
           </PromptInputTools>
           <PromptInputSubmit
             onStop={() => void agent.cancel()}

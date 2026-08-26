@@ -1,16 +1,23 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { type ArchivedChat, describeAge } from "@/lib/chat-history";
+import type { ArchivedChat } from "@/lib/chat-history";
 import { cn } from "@/lib/utils";
-import { useIsHydrated } from "@/lib/use-is-hydrated";
 import { PlusIcon, Trash2Icon, XIcon } from "lucide-react";
-import { useEffect, useState } from "react";
 
 export interface ChatSidebarProps {
   chats: ArchivedChat[];
   /** The conversation on screen, marked in the list rather than duplicated. */
   activeSessionId: string | undefined;
+  /**
+   * False until the browser has taken over.
+   *
+   * The list comes from `localStorage`, which does not exist while the page is
+   * prerendered, so rendering it before hydration would mean the server's
+   * markup and the browser's first pass disagree — a hydration error, which is
+   * exactly what shipped here the first time.
+   */
+  ready: boolean;
   onNewChat: () => void;
   onOpen: (chat: ArchivedChat) => void;
   onDelete: (sessionId: string) => void;
@@ -22,30 +29,13 @@ export interface ChatSidebarProps {
 export function ChatSidebar({
   chats,
   activeSessionId,
+  ready,
   onNewChat,
   onOpen,
   onDelete,
   open,
   onClose,
 }: ChatSidebarProps) {
-  /**
-   * The clock behind the "3h ago" labels.
-   *
-   * Gated on hydration rather than read during render: `Date.now()` differs
-   * between the server pass and the client, so the ages stay blank until the
-   * markup has settled. Refreshed each minute, because a panel left open
-   * should not keep insisting a chat was "just now" an hour later.
-   */
-  const hydrated = useIsHydrated();
-  const [now, setNow] = useState(() =>
-    typeof window === "undefined" ? 0 : Date.now()
-  );
-
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 60_000);
-    return () => clearInterval(timer);
-  }, []);
-
   return (
     <>
       {/* Tapping away closes the panel on a phone, where it sits over the
@@ -92,47 +82,43 @@ export function ChatSidebar({
         </p>
 
         <div className="-mr-1 flex-1 overflow-y-auto pr-1">
-          {chats.length === 0 ? (
+          {ready && chats.length === 0 ? (
             <p className="px-2 py-1 text-muted-foreground text-xs">
               Your chats will appear here.
             </p>
           ) : null}
 
-          {chats.map((chat) => {
+          {(ready ? chats : []).map((chat) => {
             const isActive = chat.session.sessionId === activeSessionId;
             return (
-            <div
-              className={cn(
-                "group/chat flex items-center gap-1 rounded-md",
-                isActive ? "bg-accent" : "hover:bg-accent"
-              )}
-              key={chat.session.sessionId}
-            >
-              <button
-                aria-current={isActive ? "true" : undefined}
-                className="min-w-0 flex-1 px-2 py-1.5 text-left"
-                onClick={() => onOpen(chat)}
-                type="button"
+              <div
+                className={cn(
+                  "flex items-center gap-1 rounded-md",
+                  isActive ? "bg-accent" : "hover:bg-accent"
+                )}
+                key={chat.session.sessionId}
               >
-                <span className="block truncate text-sm">{chat.title}</span>
-                <span className="block text-muted-foreground text-xs">
-                  {isActive
-                    ? "Current"
-                    : hydrated
-                      ? describeAge(chat.savedAt, now)
-                      : ""}
-                </span>
-              </button>
-              <Button
-                aria-label={`Delete chat: ${chat.title}`}
-                className="mr-1 size-7 shrink-0 p-0 text-muted-foreground opacity-0 focus-visible:opacity-100 group-hover/chat:opacity-100"
-                onClick={() => onDelete(chat.session.sessionId)}
-                type="button"
-                variant="ghost"
-              >
-                <Trash2Icon className="size-3.5" />
-              </Button>
-            </div>
+                <button
+                  aria-current={isActive ? "true" : undefined}
+                  className="min-w-0 flex-1 truncate px-2 py-2 text-left text-sm"
+                  onClick={() => onOpen(chat)}
+                  type="button"
+                >
+                  {chat.title}
+                </button>
+                {/* Always visible rather than revealed on hover: a control
+                    that only exists once you find it is one people report as
+                    broken. */}
+                <Button
+                  aria-label={`Delete chat: ${chat.title}`}
+                  className="mr-1 size-7 shrink-0 p-0 text-muted-foreground hover:text-foreground"
+                  onClick={() => onDelete(chat.session.sessionId)}
+                  type="button"
+                  variant="ghost"
+                >
+                  <Trash2Icon className="size-3.5" />
+                </Button>
+              </div>
             );
           })}
         </div>

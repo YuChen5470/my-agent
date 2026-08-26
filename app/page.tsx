@@ -48,13 +48,15 @@ import { readStoredSession, writeStoredSession } from "@/lib/stored-session";
 import {
   type ArchivedChat,
   archiveChat,
-  clearHistory,
   readHistory,
+  removeChat,
   titleFrom,
 } from "@/lib/chat-history";
-import { ChatHistoryMenu } from "@/components/chat-history-menu";
+import { ChatSidebar } from "@/components/chat-sidebar";
+import { PanelLeftIcon } from "lucide-react";
 import { SigmaIcon } from "lucide-react";
-import { useState, useSyncExternalStore } from "react";
+import { useState } from "react";
+import { useIsHydrated } from "@/lib/use-is-hydrated";
 import type { UserContent } from "ai";
 import type { ClientSessionState } from "eve/client";
 
@@ -104,24 +106,6 @@ function asPlot(part: {
  */
 const MAX_ATTACHMENTS = 3;
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
-
-/** Subscribes to nothing; only the server/client snapshot split is wanted. */
-const noSubscribe = () => () => {};
-
-/**
- * False while the server renders and through hydration, true afterwards.
- *
- * `useSyncExternalStore` is what makes that safe: React is required to use the
- * server snapshot for the hydrating render, so the first client pass matches
- * the HTML exactly, and the switch happens in the re-render after.
- */
-function useIsHydrated(): boolean {
-  return useSyncExternalStore(
-    noSubscribe,
-    () => true,
-    () => false
-  );
-}
 
 /**
  * Restores the remembered session once the page is interactive.
@@ -174,10 +158,7 @@ export default function Page() {
        * construction, so a remount is the documented way to move.
        */
       key={hydrated ? (active?.sessionId ?? "new") : "initial"}
-      onClearHistory={() => {
-        clearHistory();
-        setHistory([]);
-      }}
+      onDeleteChat={(sessionId) => setHistory(removeChat(sessionId))}
       onSwitch={switchTo}
     />
   );
@@ -186,12 +167,12 @@ export default function Page() {
 function MathsEngine({
   history,
   initialSession,
-  onClearHistory,
+  onDeleteChat,
   onSwitch,
 }: {
   history: ArchivedChat[];
   initialSession: ClientSessionState | undefined;
-  onClearHistory: () => void;
+  onDeleteChat: (sessionId: string) => void;
   onSwitch: (
     next: ClientSessionState | undefined,
     leaving: ArchivedChat | null
@@ -206,6 +187,23 @@ function MathsEngine({
   });
   const isBusy = agent.status === "submitted" || agent.status === "streaming";
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  /**
+   * How this conversation is labelled in the sidebar: its opening question.
+   *
+   * `null` for a chat with nothing in it yet — including one holding only an
+   * attachment and no words, which has no sensible title and is not worth a
+   * row someone has to read past.
+   */
+  const firstQuestion = agent.data.messages
+    .filter((message) => message.role === "user")
+    .at(0)
+    ?.parts.flatMap((part) => (part.type === "text" ? [part.text] : []))
+    .join("")
+    .trim();
+
+  const currentTitle = firstQuestion ? titleFrom(firstQuestion) : null;
 
   /**
    * The conversation as it would appear in the history list, or `null` when
@@ -217,32 +215,23 @@ function MathsEngine({
    */
   const archivable = (): ArchivedChat | null => {
     const session = agent.session;
-    if (session === undefined) return null;
-
-    const firstQuestion = agent.data.messages
-      .filter((message) => message.role === "user")
-      .at(0)
-      ?.parts.flatMap((part) => (part.type === "text" ? [part.text] : []))
-      .join("")
-      .trim();
-
-    // An empty chat, or one holding only an attachment with no question, is
-    // not worth a row someone has to read past.
-    if (!firstQuestion) return null;
+    if (session === undefined || currentTitle === null) return null;
 
     return {
       savedAt: Date.now(),
       session,
-      title: titleFrom(firstQuestion),
+      title: currentTitle,
     };
   };
 
   const startNewChat = () => {
     setAttachmentError(null);
+    setSidebarOpen(false);
     onSwitch(undefined, archivable());
   };
 
   const openChat = (chat: ArchivedChat) => {
+    setSidebarOpen(false);
     if (chat.session.sessionId === agent.session?.sessionId) return;
     setAttachmentError(null);
     onSwitch(chat.session, archivable());
@@ -283,42 +272,34 @@ function MathsEngine({
   const canRetry = Boolean(turnError?.canRetry && lastQuestion && !isBusy);
 
   return (
-    <main className="mx-auto flex h-dvh max-w-3xl flex-col gap-4 p-4">
+    <div className="flex h-dvh">
+      <ChatSidebar
+        chats={history}
+        currentTitle={currentTitle}
+        onClose={() => setSidebarOpen(false)}
+        onDelete={onDeleteChat}
+        onNewChat={startNewChat}
+        onOpen={openChat}
+        open={sidebarOpen}
+      />
+
+      <main className="mx-auto flex min-w-0 max-w-3xl flex-1 flex-col gap-4 p-4">
       <header className="flex items-center gap-2 border-b pb-3">
+        <Button
+          aria-label="Show chats"
+          className="size-8 shrink-0 p-0 md:hidden"
+          onClick={() => setSidebarOpen(true)}
+          type="button"
+          variant="ghost"
+        >
+          <PanelLeftIcon className="size-4" />
+        </Button>
         <SigmaIcon className="size-5 text-muted-foreground" />
         <div>
           <h1 className="font-semibold leading-none">The Maths Engine</h1>
           <p className="text-muted-foreground text-xs">
             Explains method. Never does the arithmetic itself.
           </p>
-        </div>
-        {/* A conversation now outlives the tab, so there has to be a way out
-            of one — otherwise a session that has spent its token budget is
-            restored on every visit and the app is permanently stuck.
-
-            Deliberately not disabled while busy. Resuming a session whose turn
-            died — the server restarted or redeployed mid-answer — leaves the
-            client waiting on events that will never arrive, and cancelling
-            does not clear it because there is nothing live to cancel. If this
-            were disabled during that state it would be the one button that
-            could help and the one button out of reach. `reset` aborts whatever
-            is in flight, so using it mid-answer is safe. */}
-        <div className="ml-auto flex items-center gap-1">
-          <ChatHistoryMenu
-            chats={history}
-            onClear={onClearHistory}
-            onOpen={openChat}
-          />
-          {agent.data.messages.length > 0 ? (
-            <Button
-              className="h-8 px-3 text-sm"
-              onClick={startNewChat}
-              type="button"
-              variant="outline"
-            >
-              New chat
-            </Button>
-          ) : null}
         </div>
       </header>
 
@@ -536,6 +517,7 @@ function MathsEngine({
           />
         </PromptInputFooter>
       </PromptInput>
-    </main>
+      </main>
+    </div>
   );
 }

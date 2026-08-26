@@ -100,6 +100,14 @@ export function archiveChat(chat: ArchivedChat): ArchivedChat[] {
   return next;
 }
 
+export function removeChat(sessionId: string): ArchivedChat[] {
+  const next = readHistory().filter(
+    (chat) => chat.session.sessionId !== sessionId
+  );
+  writeHistory(next);
+  return next;
+}
+
 export function clearHistory() {
   try {
     window.localStorage.removeItem(HISTORY_KEY);

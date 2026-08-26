@@ -51,7 +51,7 @@ import {
 import { ChatSidebar } from "@/components/chat-sidebar";
 import { PanelLeftIcon } from "lucide-react";
 import { SigmaIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useIsHydrated } from "@/lib/use-is-hydrated";
 import type { UserContent } from "ai";
 import type { ClientSessionState } from "eve/client";
@@ -150,6 +150,19 @@ export default function Page() {
     }
   };
 
+  /*
+   * Both handed to the chat with a stable identity, because it files the open
+   * conversation from an effect that lists them as dependencies. A fresh
+   * function on every render re-ran that effect, and re-running it straight
+   * after a delete put the row back — which is what made the delete button
+   * look like it did nothing.
+   */
+  const remember = useCallback(
+    (chat: ArchivedChat) => setHistory(rememberChat(chat)),
+    []
+  );
+  const openSidebar = useCallback(() => setSidebarOpen(true), []);
+
   return (
     <div className="flex h-dvh">
       {/*
@@ -180,8 +193,8 @@ export default function Page() {
          * agent around it.
          */
         key={hydrated ? (active?.sessionId ?? "new") : "initial"}
-        onOpenSidebar={() => setSidebarOpen(true)}
-        onRemember={(chat) => setHistory(rememberChat(chat))}
+        onOpenSidebar={openSidebar}
+        onRemember={remember}
       />
     </div>
   );
@@ -221,7 +234,6 @@ function MathsEngine({
     .trim();
 
   const sessionId = agent.session?.sessionId;
-  const streamIndex = agent.session?.streamIndex;
 
   /**
    * Files the conversation as soon as it has a name, rather than when it is
@@ -233,19 +245,20 @@ function MathsEngine({
    * told what the live conversation is called, which is what allowed it out of
    * this component and stopped the list flickering.
    *
-   * `rememberChat` ignores a session it already holds, so this settling
-   * repeatedly cannot reorder or relabel anything.
+   * Deliberately not keyed on the session's stream cursor, which advances with
+   * every event: that had this run throughout an answer, and any run after a
+   * delete puts the row back. Once per conversation is enough — the cursor is
+   * stored as 0 because resuming replays from the start of the stream anyway.
    */
   useEffect(() => {
-    if (sessionId === undefined || streamIndex === undefined) return;
-    if (!firstQuestion) return;
+    if (sessionId === undefined || !firstQuestion) return;
 
     onRemember({
       savedAt: Date.now(),
-      session: { sessionId, streamIndex },
+      session: { sessionId, streamIndex: 0 },
       title: titleFrom(firstQuestion),
     });
-  }, [sessionId, streamIndex, firstQuestion, onRemember]);
+  }, [sessionId, firstQuestion, onRemember]);
 
   // HITL requests ride on dynamic-tool parts. Scan every message, not just the
   // last one: an unrelated turn can append newer messages while a question

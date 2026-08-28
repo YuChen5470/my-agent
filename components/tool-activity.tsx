@@ -34,6 +34,7 @@ function describeWork(toolName: string, input: unknown): string {
 
   if (toolName === "plot_function") return "Plotting";
   if (toolName === "number_theory") return "Checking the factors";
+  if (toolName === "search_documents") return "Searching the course documents";
   return "Working";
 }
 

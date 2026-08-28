@@ -32,6 +32,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -44,3 +45,13 @@ next-env.d.ts
 .eve/
 
 .vercel
+
+# working notes
+.scratch/
+
+# corpus documents are not mine to redistribute; see corpus/README.md
+/corpus/*
+!/corpus/README.md
+
+# ingest progress log, rebuilt by npm run rag:ingest
+ingest-log.jsonl

@@ -4,7 +4,9 @@
 
 ### Issue tracker
 
-Issues live as markdown files under `.scratch/<feature-slug>/` in this repo. See `docs/agents/issue-tracker.md`.
+Issues live as markdown files under `.scratch/<feature-slug>/`. See `docs/agents/issue-tracker.md`.
+
+`.scratch/` is gitignored on purpose: it is a working scratchpad, not part of the project. Specs and issue files there are local to whoever wrote them, so do not expect a fresh clone to contain any, and do not commit them.
 
 ### Triage labels
 

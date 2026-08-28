@@ -38,6 +38,10 @@ import {
   FunctionPlot,
   type FunctionPlotProps,
 } from "@/components/function-plot";
+import {
+  RetrievedSources,
+  type RetrievedSourcesProps,
+} from "@/components/retrieved-sources";
 import { describeAgentError } from "@/lib/agent-error";
 import { prepareImage } from "@/lib/prepare-image";
 import { readStoredSession, writeStoredSession } from "@/lib/stored-session";
@@ -89,6 +93,40 @@ function asPlot(part: {
     to: output.to,
     segments: output.segments,
     yWindow: output.yWindow ?? null,
+  };
+}
+
+/**
+ * Recognise a `search_documents` result so the retrieved passages can be shown.
+ *
+ * Narrowed by shape for the same reason as `asPlot`: the output arrives as
+ * `unknown` through eve's dynamic-tool part. A failed search has no `chunks`
+ * and falls through to the one-line receipt.
+ *
+ * A refusal is deliberately still rendered — a verdict of "none" is a result
+ * worth showing, since it is the evidence behind the agent saying the documents
+ * do not cover something.
+ */
+function asRetrieval(part: {
+  toolName: string;
+  output?: unknown;
+}): RetrievedSourcesProps | null {
+  if (part.toolName !== "search_documents") return null;
+
+  const output = part.output as
+    | (Partial<RetrievedSourcesProps> & { ok?: boolean })
+    | undefined;
+  if (!output || output.ok !== true) return null;
+  if (!Array.isArray(output.chunks)) return null;
+
+  return {
+    verdict:
+      output.verdict === "found" || output.verdict === "uncertain"
+        ? output.verdict
+        : "none",
+    question: output.question ?? "",
+    chunks: output.chunks,
+    gate: output.gate ?? null,
   };
 }
 
@@ -399,6 +437,7 @@ function MathsEngine({
                     if (part.toolName === "ask_question") return null;
 
                     const plot = asPlot(part);
+                    const retrieval = asRetrieval(part);
                     const running =
                       part.state === "input-streaming" ||
                       part.state === "input-available";
@@ -410,6 +449,11 @@ function MathsEngine({
                             input={part.input}
                             toolName={part.toolName}
                           />
+                        ) : retrieval ? (
+                          // The sources panel is this call's receipt, naming
+                          // every file and score, so a one-line summary above it
+                          // would only repeat itself.
+                          <RetrievedSources {...retrieval} />
                         ) : (
                           <ToolReceipt
                             errorText={part.errorText}

@@ -43,8 +43,13 @@ export default defineTool({
       }
 
       const compiled = node.compile();
-      const { segments, undefinedCount, clippedCount, yWindow } =
-        sampleFunction(compiled, variable, from, to, SAMPLES);
+      const { segments, yWindow } = sampleFunction(
+        compiled,
+        variable,
+        from,
+        to,
+        SAMPLES
+      );
 
       if (segments.length === 0) {
         return {

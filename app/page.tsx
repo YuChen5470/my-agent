@@ -43,6 +43,7 @@ import {
   type RetrievedSourcesProps,
 } from "@/components/retrieved-sources";
 import { describeAgentError } from "@/lib/agent-error";
+import { uncitedSources } from "@/lib/uncited-sources";
 import { prepareImage } from "@/lib/prepare-image";
 import { readStoredSession, writeStoredSession } from "@/lib/stored-session";
 import {
@@ -53,6 +54,7 @@ import {
   titleFrom,
 } from "@/lib/chat-history";
 import { ChatSidebar } from "@/components/chat-sidebar";
+import { FileWarningIcon } from "lucide-react";
 import { PanelLeftIcon } from "lucide-react";
 import { SigmaIcon } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
@@ -403,7 +405,18 @@ function MathsEngine({
             />
           ) : null}
 
-          {agent.data.messages.map((message) => (
+          {agent.data.messages.map((message, messageIndex) => {
+            // Checked only once the turn has finished. Mid-stream the answer is
+            // half-written, so a citation still on its way would be reported as
+            // missing and then retracted.
+            const streaming =
+              isBusy && messageIndex === agent.data.messages.length - 1;
+            const uncited =
+              message.role === "assistant" && !streaming
+                ? uncitedSources(message)
+                : [];
+
+            return (
             <Message from={message.role} key={message.id}>
               <MessageContent>
                 {message.parts.map((part, index) => {
@@ -469,9 +482,25 @@ function MathsEngine({
 
                   return null;
                 })}
+
+                {uncited.length > 0 ? (
+                  <div className="mt-3 flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-xs">
+                    <FileWarningIcon className="mt-0.5 size-3.5 shrink-0 text-amber-600 dark:text-amber-500" />
+                    <span className="text-muted-foreground">
+                      This answer drew on{" "}
+                      {uncited.length === 1 ? "a document" : "documents"} it did
+                      not name:{" "}
+                      <span className="font-medium text-foreground">
+                        {uncited.join(", ")}
+                      </span>
+                      . Open the passages above to check what was used.
+                    </span>
+                  </div>
+                ) : null}
               </MessageContent>
             </Message>
-          ))}
+            );
+          })}
 
           {/* The wait a student actually notices is the model thinking, not the
               tools — mathjs returns in milliseconds, so a per-tool spinner

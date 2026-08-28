@@ -18,6 +18,8 @@ Five tools, all of them in `agent/tools/`. eve discovers them from that folder; 
 
 **`search_documents`** — semantic search over the course documents. It embeds the question with Cloudflare Workers AI and asks Vectorize for the five closest chunks, then decides for itself whether any of them are actually relevant, returning a `verdict` of `found`, `uncertain`, or `none` along with the scores it judged on. Every chunk carries the filename it came from, so an answer can be traced back to a page. Requires the `CF_*` variables below; without them it reports that it is unconfigured and the rest of the app carries on working.
 
+Retrieved facts are cited by filename, and that is checked rather than merely asked for. The instructions require the citation; on top of that, the interface compares the answer against the files the search actually returned, and if an answer drew on documents it never named, it says so beneath the answer. A document cannot be used silently.
+
 **`remember_student`** — notes what is worth carrying across the conversation: the student's level or course, the topic they are working through, and mistakes they actually made. Those notes come back at the top of each later turn, which is what lets the tutor say "this is the same step you got wrong earlier".
 
 Alongside these, the agent uses eve's built-in `ask_question` on worded problems, to lay out the assumptions it is making (starting height, direction, which constant to use) and get the student's confirmation before turning the words into an expression.
@@ -67,6 +69,7 @@ Open [http://localhost:3000](http://localhost:3000).
 | `npm run lint` | ESLint over the source. | Before committing. Should be silent. |
 | `npm run typecheck` | `tsc --noEmit` — types only, no build output. | For a fast type check without waiting for a full build. |
 | `npm run eval` | Runs the eve eval suite in `evals/` against the live model. | After changing the instructions or a tool, to check the behaviour it guarantees still holds. Costs model quota. |
+| `npm run test:citations` | Node's test runner over `lib/uncited-sources.test.ts`. No model, no network, runs in under a second. | After touching retrieval or the citation check. |
 | `npm run rag:ingest` | Reads `corpus/`, chunks and embeds it, uploads to Vectorize. | Once at setup, and again whenever you add or change a document. |
 
 ## Building the document index

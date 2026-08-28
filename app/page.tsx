@@ -491,7 +491,7 @@ function MathsEngine({
                       of them, so there is no source to check it against. The
                       passages it was given came from{" "}
                       <span className="font-medium text-foreground">
-                        {uncited.join(", ")}
+                        {uncited.join(", ")}{" "}
                       </span>
                       — open them above to see what was actually said.
                     </span>

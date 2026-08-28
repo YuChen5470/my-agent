@@ -89,10 +89,15 @@ test("a citation in one search covers passages from another", () => {
   );
 });
 
-test("an uncertain verdict carries the same obligation as found", () => {
+test("an uncertain verdict owes nothing — refusing is a valid outcome", () => {
+  // "uncertain" hands the judgement to the model: on topic, nothing decisive,
+  // read them and decide. A refusal uses no document and owes no citation.
   assert.deepEqual(
-    run([search("uncertain", ["SPEC.pdf"]), text("Probably 100 marks.")]),
-    ["SPEC.pdf"]
+    run([
+      search("uncertain", ["SPEC.pdf"]),
+      text("The documents I have do not cover this."),
+    ]),
+    []
   );
 });
 

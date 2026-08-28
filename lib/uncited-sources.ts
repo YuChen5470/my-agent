@@ -70,10 +70,17 @@ export function uncitedSources(message: {
     if (!output || output.ok !== true) continue;
     if (!Array.isArray(output.chunks)) continue;
 
-    // A verdict of "none" fed nothing into the answer, so there is nothing the
-    // answer should have cited. Only passages actually offered as evidence
-    // carry an obligation.
-    if (output.verdict !== "found" && output.verdict !== "uncertain") continue;
+    // Only "found" carries an obligation to cite.
+    //
+    // "none" fed nothing into the answer. "uncertain" looks like it should
+    // count, and an earlier version had it counting, but the tool returns that
+    // verdict precisely to hand the judgement to the model: the passages are on
+    // topic, nothing stands out, read them and decide. Refusing is one of the
+    // correct outcomes, and a refusal uses no document and owes no citation.
+    // Treating "uncertain" as an obligation meant a well-judged refusal — the
+    // behaviour this whole tool exists to make possible — was told off for
+    // failing to cite the documents it had just declined to rely on.
+    if (output.verdict !== "found") continue;
 
     for (const chunk of output.chunks) {
       if (typeof chunk?.source === "string") used.add(chunk.source);

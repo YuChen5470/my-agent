@@ -67,7 +67,7 @@ Open [http://localhost:3000](http://localhost:3000).
 | `npm run build` | Production build — compiles the app and typechecks it. | Before deploying, and to check nothing is broken. |
 | `npm start` | Serves an already-built app. | After `npm run build`, to check the production build locally. |
 | `npm run lint` | ESLint over the source. | Before committing. Should be silent. |
-| `npm run typecheck` | `tsc --noEmit` — types only, no build output. | For a fast type check without waiting for a full build. |
+| `npm run typecheck` | Generates Next's route types, then `tsc --noEmit` — types only, no build output. | For a fast type check without waiting for a full build. |
 | `npm run eval` | Runs the eve eval suite in `evals/` against the live model. | After changing the instructions or a tool, to check the behaviour it guarantees still holds. Costs model quota. |
 | `npm run test:citations` | Node's test runner over `lib/uncited-sources.test.ts`. No model, no network, runs in under a second. | After touching retrieval or the citation check. |
 | `npm run rag:ingest` | Reads `corpus/`, chunks and embeds it, uploads to Vectorize. | Once at setup, and again whenever you add or change a document. |

@@ -68,7 +68,7 @@ question about the documents.
 
 ### Citing what you found
 
-Name the file. *"The specification (ALEVELEDEXGOVAIWRK.pdf) puts Paper 1 at 2 hours and 100
+Name the file. *"The specification (ALevelSpec.pdf) puts Paper 1 at 2 hours and 100
 marks."* A retrieved fact without its source is worth no more than a guess, because the student
 has no way to check it.
 

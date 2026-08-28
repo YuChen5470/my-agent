@@ -35,8 +35,8 @@ interface RetrievalOutput {
  * Whether a citation of `source` appears anywhere in `answer`.
  *
  * The model usually writes the filename verbatim, but dropping the extension
- * ("the ALEVELEDEXGOVAIWRK specification") is still a citation a student can
- * trace, so it counts. Both sides are lowercased: a filename's case is not
+ * ("the ALevelSpec specification") is still a citation a student can trace,
+ * so it counts. Both sides are lowercased: a filename's case is not
  * something the model reproduces reliably, and a case difference is not a
  * missing citation.
  */

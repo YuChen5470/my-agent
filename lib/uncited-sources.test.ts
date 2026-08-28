@@ -145,8 +145,8 @@ test("a short filename stem does not match inside an ordinary word", () => {
 test("a real filename is still matched when the answer names it", () => {
   assert.deepEqual(
     run([
-      search("found", ["ALEVELEDEXGOVAIWRK.pdf"]),
-      text("According to the specification (ALEVELEDEXGOVAIWRK.pdf), 100 marks."),
+      search("found", ["ALevelSpec.pdf"]),
+      text("According to the specification (ALevelSpec.pdf), 100 marks."),
     ]),
     []
   );

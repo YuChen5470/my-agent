@@ -487,13 +487,13 @@ function MathsEngine({
                   <div className="mt-3 flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-xs">
                     <FileWarningIcon className="mt-0.5 size-3.5 shrink-0 text-amber-600 dark:text-amber-500" />
                     <span className="text-muted-foreground">
-                      This answer drew on{" "}
-                      {uncited.length === 1 ? "a document" : "documents"} it did
-                      not name:{" "}
+                      This answer used the course documents without naming any
+                      of them, so there is no source to check it against. The
+                      passages it was given came from{" "}
                       <span className="font-medium text-foreground">
                         {uncited.join(", ")}
                       </span>
-                      . Open the passages above to check what was used.
+                      — open them above to see what was actually said.
                     </span>
                   </div>
                 ) : null}

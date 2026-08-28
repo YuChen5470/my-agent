@@ -43,7 +43,18 @@ interface RetrievalOutput {
 function isCited(source: string, answer: string): boolean {
   const name = source.toLowerCase();
   const stem = name.replace(/\.(pdf|md|txt)$/, "");
-  return answer.includes(name) || answer.includes(stem);
+
+  // Bounded, not a plain substring. A short stem otherwise matches inside
+  // ordinary words — a file called "A.pdf" has the stem "a", which a naive
+  // includes() finds in "marks" and calls a citation. Boundaries are
+  // non-alphanumeric rather than \b so that a stem ending in a symbol still
+  // terminates cleanly.
+  const bounded = (needle: string) =>
+    new RegExp(
+      `(^|[^a-z0-9])${needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}($|[^a-z0-9])`
+    ).test(answer);
+
+  return bounded(name) || bounded(stem);
 }
 
 export function uncitedSources(message: {
@@ -81,5 +92,21 @@ export function uncitedSources(message: {
   // as uncited here would flash a warning that retracts itself a second later.
   if (answer.trim() === "") return [];
 
-  return [...used].filter((source) => !isCited(source, answer));
+  // All or nothing, deliberately.
+  //
+  // Retrieval returns five chunks and an answer legitimately rests on one of
+  // them. The first version of this reported every retrieved file the answer
+  // did not name, which meant a correct, properly cited answer about the
+  // specification was accused of silently using three exam papers it had only
+  // been offered and had rightly ignored. Retrieved is not used, and nothing
+  // here can tell the two apart — only the model knows which passage it leaned
+  // on.
+  //
+  // So this checks the one thing that is knowable from outside: whether an
+  // answer built on retrieved passages named any of them at all. That is the
+  // failure worth catching — an answer with no traceable source. Which of five
+  // candidates deserved the credit is a question this cannot answer, and
+  // guessing at it produced false accusations against good answers.
+  const citedAny = [...used].some((source) => isCited(source, answer));
+  return citedAny ? [] : [...used];
 }

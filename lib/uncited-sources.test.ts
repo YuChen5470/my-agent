@@ -60,10 +60,32 @@ test("citation matching ignores case", () => {
   );
 });
 
-test("with two sources, only the uncited one is reported", () => {
+test("naming one of several retrieved files is enough", () => {
+  // Retrieval offers five chunks and an answer rests on one. The others were
+  // available, not used, and must not be reported as silently used.
   assert.deepEqual(
     run([search("found", ["A.pdf", "B.pdf"]), text("According to A.pdf, yes.")]),
-    ["B.pdf"]
+    []
+  );
+});
+
+test("naming none of them reports all of them", () => {
+  assert.deepEqual(
+    run([search("found", ["A.pdf", "B.pdf"]), text("The answer is 100 marks.")]),
+    ["A.pdf", "B.pdf"]
+  );
+});
+
+test("a citation in one search covers passages from another", () => {
+  // Two searches in one turn is normal. What matters is that the finished
+  // answer is traceable to something, not that each call was cited.
+  assert.deepEqual(
+    run([
+      search("found", ["A.pdf"]),
+      search("found", ["B.pdf"]),
+      text("According to A.pdf, yes."),
+    ]),
+    []
   );
 });
 
@@ -105,4 +127,22 @@ test("ignores other tools' output", () => {
     output: { ok: true, result: "2x" },
   };
   assert.deepEqual(run([calc, text("The derivative is 2x.")]), []);
+});
+
+test("a short filename stem does not match inside an ordinary word", () => {
+  // "A.pdf" has the stem "a", which a plain substring check finds in "marks".
+  assert.deepEqual(
+    run([search("found", ["A.pdf"]), text("The answer is 100 marks.")]),
+    ["A.pdf"]
+  );
+});
+
+test("a real filename is still matched when the answer names it", () => {
+  assert.deepEqual(
+    run([
+      search("found", ["ALEVELEDEXGOVAIWRK.pdf"]),
+      text("According to the specification (ALEVELEDEXGOVAIWRK.pdf), 100 marks."),
+    ]),
+    []
+  );
 });

@@ -18,7 +18,7 @@ Five tools, all of them in `agent/tools/`. eve discovers them from that folder; 
 
 **`search_documents`** — semantic search over the course documents. It embeds the question with Cloudflare Workers AI and asks Vectorize for the five closest chunks, then decides for itself whether any of them are actually relevant, returning a `verdict` of `found`, `uncertain`, or `none` along with the scores it judged on. Every chunk carries the filename it came from, so an answer can be traced back to a page. Requires the `CF_*` variables below; without them it reports that it is unconfigured and the rest of the app carries on working.
 
-Retrieved facts are cited by filename, and that is checked rather than merely asked for. The instructions require the citation; on top of that, the interface compares the answer against the files the search actually returned, and if an answer drew on documents it never named, it says so beneath the answer. A document cannot be used silently.
+Retrieved facts are cited by filename. The instructions require it, and the sources panel above each answer lists every file the search returned with its relevance score — so a student can always see what the answer was built on, whether or not the prose names it.
 
 **`remember_student`** — notes what is worth carrying across the conversation: the student's level or course, the topic they are working through, and mistakes they actually made. Those notes come back at the top of each later turn, which is what lets the tutor say "this is the same step you got wrong earlier".
 
@@ -69,7 +69,6 @@ Open [http://localhost:3000](http://localhost:3000).
 | `npm run lint` | ESLint over the source. | Before committing. Should be silent. |
 | `npm run typecheck` | Generates Next's route types, then `tsc --noEmit` — types only, no build output. | For a fast type check without waiting for a full build. |
 | `npm run eval` | Runs the eve eval suite in `evals/` against the live model. | After changing the instructions or a tool, to check the behaviour it guarantees still holds. Costs model quota. |
-| `npm run test:citations` | Node's test runner over `lib/uncited-sources.test.ts`. No model, no network, runs in under a second. | After touching retrieval or the citation check. |
 | `npm run rag:ingest` | Reads `corpus/`, chunks and embeds it, uploads to Vectorize. | Once at setup, and again whenever you add or change a document. |
 
 ## Building the document index
@@ -94,7 +93,7 @@ npm run rag:ingest
 
 What it expects and what it does: it reads every `.pdf`, `.md` and `.txt` in `corpus/` (PDFs are parsed to markdown natively), splits each into 500-word chunks overlapping by 50, embeds them in batches of 20 through Workers AI, and upserts them to Vectorize keyed as `filename#chunkIndex`. Set `CHUNK_WORDS` and `OVERLAP_WORDS` to override the chunk sizes.
 
-**Roughly how long:** about 90 chunks from twelve documents took a few minutes, most of it spent in the upsert calls rather than the embedding. Vectorize is eventually consistent, so the script then polls until the index reports it has processed the final write — that wait alone is usually 45–70 seconds. Do not query the index before it finishes; a query run too early returns confident but wrong results.
+**Roughly how long:** about 87 chunks from ten documents took a few minutes, most of it spent in the upsert calls rather than the embedding. Vectorize is eventually consistent, so the script then polls until the index reports it has processed the final write — that wait alone is usually 45–70 seconds. Do not query the index before it finishes; a query run too early returns confident but wrong results.
 
 **It is resumable.** Every chunk that lands is appended to `ingest-log.jsonl` immediately, and a re-run skips anything already logged. If it dies halfway, run it again. To force a full rebuild, delete that file.
 

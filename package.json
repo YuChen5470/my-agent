@@ -9,8 +9,7 @@
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
     "eval": "eve eval",
-    "rag:ingest": "tsx --env-file-if-exists=.env.local scripts/ingest.ts",
-    "test:citations": "tsx --test lib/uncited-sources.test.ts"
+    "rag:ingest": "tsx --env-file-if-exists=.env.local scripts/ingest.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "^4.0.51",
